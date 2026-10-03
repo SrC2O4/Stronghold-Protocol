@@ -15,13 +15,13 @@
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Icon, MicroLabel, Button, TierChip, TextField, Countdown, Spinner, confirmDialog, hasDeadline } from '../ui/components.js';
 import { Img, RichText, UnitThumb } from '../ui/gameComponents.js';
-import { chessAvatarUrl, chessPortraitUrl, subProfIconUrl, bondIconUrl, moduleTypeIconUrl } from '../ui/assetUrls.js';
+import { chessAvatarUrl, chessPortraitUrl, subProfIconUrl, bondIconUrl, moduleRecordIconUrl } from '../ui/assetUrls.js';
 import { data, useData, localAsset } from '../data.js';
 import { useStore } from '../store.js';
 import { PHASE } from '../../../shared/constants.js';
 import {
   MODULE_NONE, PROF_ORDER, PROF_NAME, rosterOf, filterRoster, recordsOf, chessOptions, effectiveChoice, setChoice, resetChoice,
-  changedCount, skillLabel, moduleBadge, attrRows, skillTags,
+  changedCount, skillLabel, moduleBadge, attrRows, skillTags, sanitizeEntries,
 } from '../ui/loadoutModel.js';
 import { loadoutStore, openLoadout, closeLoadout, setEntries } from '../ui/loadoutSync.js';
 
@@ -47,24 +47,7 @@ function skillIconOf(m, rec) {
   return alt && typeof skills[alt] === 'string' ? skills[alt] : null;
 }
 
-/**
- * Module icon URL: the official type icon from the local-client art (`local-assets.json` groups.module, matched
- * case-insensitively by typeName), else manifest `modules[icon]` / `uniequip[icon]` when the asset pipeline provides one.
- */
-function moduleIconOf(m, rec) {
-  if (!rec) return null;
-  const local = moduleTypeIconUrl(data.get('local'), rec.typeName || rec.type);
-  if (local) return local;
-  if (!m) return null;
-  for (const group of ['modules', 'uniequip', 'equip']) {
-    const g = m[group];
-    if (g && typeof g === 'object') {
-      const v = g[rec.icon] || g[rec.uniEquipId] || g[rec.typeIcon];
-      if (typeof v === 'string') return v;
-    }
-  }
-  return null;
-}
+const moduleIconOf = (m, rec) => moduleRecordIconUrl(m, rec, data.get('local'));
 
 /** Skill icon with the official selection outline; falls back to a lettered tile. */
 function SkillIcon({ m, rec, index, on = false, size = 'md' }) {
@@ -278,6 +261,26 @@ const SYNC_TEXT = {
   locked: ['本局已锁定 · 下一局生效', 'is-warn'], error: ['同步失败', 'is-bad'],
 };
 
+function RecruitPicker({ tier, candidates, entries, replacingId, m, onChoose, onClose }) {
+  const [query, setQuery] = useState('');
+  const selectedChars = new Set(candidates.filter((c) => entries[c.chessId] && c.chessId !== replacingId).map((c) => c.charId));
+  const options = candidates.filter((c) => c.tier === tier && !selectedChars.has(c.charId)
+    && (!query.trim() || `${c.name} ${c.appellation || ''}`.toLowerCase().includes(query.trim().toLowerCase())));
+  return html`<section class="lo-recruit-picker" aria-label=${`${ROMAN[tier]}阶甄选候选`}>
+    <div class="lo-recruit-picker__head"><b>${ROMAN[tier]} · 选择甄选干员</b>
+      <button type="button" class="btn btn--ghost" onClick=${onClose}>返回干员列表</button></div>
+    <p>默认拥有全部六星 · 已排除固定卡池与其他甄选位中的干员</p>
+    <input class="lo-recruit-search" aria-label="搜索甄选干员" placeholder="搜索干员名称…" value=${query} autoFocus
+      onInput=${(e) => setQuery(e.target.value)} />
+    <div class="lo-recruit-options">
+      ${options.map((c) => html`<button type="button" class="lo-recruit-option" key=${c.chessId} data-recruit=${c.chessId}
+        onClick=${() => onChoose(c.chessId)}><${Img} src=${chessAvatarUrl(m, c)} alt="" /><b>${c.name}</b>
+        <small>${PROF_NAME[c.profession] || ''}</small></button>`)}
+      ${!options.length ? html`<p class="lo-empty">没有符合条件的干员</p>` : null}
+    </div>
+  </section>`;
+}
+
 /** The overlay screen. */
 function LoadoutScreen({ st }) {
   const ready = useData('chess', 'bonds', 'assets', 'local');
@@ -289,7 +292,26 @@ function LoadoutScreen({ st }) {
   const m = data.get('assets');
   const getChess = (id) => data.lookup('chess', id);
   const getBond = (id) => data.lookup('bonds', id);
-  const roster = useMemo(() => rosterOf(data.list('chess')), [ready]);
+  const candidates = useMemo(() => data.list('chess').filter((c) => c.recruit && !c.isGolden && !getChess(c.recruitPresetId)?.visible)
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh')), [ready]);
+  const [recruitPicker, setRecruitPicker] = useState(null);
+  const recruitTier = [5, 6].includes(st.filters.tier) ? st.filters.tier : null;
+  useEffect(() => { setRecruitPicker(null); }, [st.filters.tier]);
+  useEffect(() => {
+    if (!ready) return;
+    const clean = sanitizeEntries(st.entries, getChess);
+    if (JSON.stringify(clean) !== JSON.stringify(st.entries)) setEntries(clean);
+  }, [ready, st.entries]);
+  const roster = useMemo(() => [...rosterOf(data.list('chess')), ...candidates.filter((c) => st.entries[c.chessId])], [ready, st.entries]);
+  const selectRecruit = (replacingId, id) => {
+    const entries = { ...st.entries };
+    const previous = entries[id];
+    if (replacingId) delete entries[replacingId];
+    if (id) entries[id] = previous || { skill: getChess(id).skill.index };
+    setEntries(entries);
+    setRecruitPicker(null);
+    if (id) loadoutStore.set({ sel: id });
+  };
   const bonds = useMemo(() => {
     const used = new Set(roster.flatMap((c) => c.bonds || []));
     return (data.list('bonds') || []).filter((b) => b && used.has(b.bondId))
@@ -305,11 +327,15 @@ function LoadoutScreen({ st }) {
 
   const pick = (id) => { loadoutStore.set({ sel: id }); setNarrowDetail(true); };
   const change = (patch) => { if (base) setEntries(setChoice(loadoutStore.get().entries, base, golden, patch)); };
-  const resetOne = () => { if (base) setEntries(resetChoice(loadoutStore.get().entries, base.chessId)); };
+  const resetOne = () => { if (base) {
+    const next = resetChoice(loadoutStore.get().entries, base.chessId);
+    if (base.recruit) next[base.chessId] = { skill: base.skill.index };
+    setEntries(next);
+  } };
   const resetAll = async () => {
     if (!nChanged) return;
     const ok = await confirmDialog({ title: '全部恢复默认', text: `将 ${nChanged} 名干员的技能与模组恢复为默认配置？`, okText: '恢复默认', danger: true });
-    if (ok) setEntries({});
+    if (ok) setEntries(Object.fromEntries(candidates.filter((c) => st.entries[c.chessId]).map((c) => [c.chessId, { skill: c.skill.index }])));
   };
 
   // Esc closes; ←/→ browse the filtered roster (not while typing in the search field)
@@ -317,11 +343,17 @@ function LoadoutScreen({ st }) {
     const onKey = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (document.querySelector('.modal')) return; // a confirm dialog handles its own keys
+      if (document.querySelector('.lo-recruit-picker')) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); setRecruitPicker(null); }
+        return;
+      }
       const typing = e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
       if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeLoadout(); return; }
       if (typing) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-        const ids = filterRoster(rosterOf(data.list('chess')), loadoutStore.get().filters, loadoutStore.get().entries, getChess, getBond).map((c) => c.chessId);
+        const current = loadoutStore.get();
+        const all = [...rosterOf(data.list('chess')), ...data.list('chess').filter((c) => c.recruit && !c.isGolden && current.entries[c.chessId])];
+        const ids = filterRoster(all, current.filters, current.entries, getChess, getBond).map((c) => c.chessId);
         if (!ids.length) return;
         const cur = Math.max(0, ids.indexOf(loadoutStore.get().sel));
         const next = ids[(cur + (e.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length];
@@ -365,10 +397,24 @@ function LoadoutScreen({ st }) {
     ${!ready ? html`<div class="lo-loading"><${Spinner} size="sm" />正在载入干员数据（打开页面后仅载入一次）…</div>` : html`<main class=${cx('lo-body', narrowDetail && 'is-detail')}>
       <section class="lo-roster">
         <${Filters} m=${m} filters=${st.filters} bonds=${bonds} onFilters=${(filters) => loadoutStore.set({ filters })} />
-        <div class="lo-grid" role="listbox" aria-label="干员列表" ref=${gridRef}>
+        ${recruitTier ? html`<div class="lo-recruit-slots" aria-label=${`${ROMAN[recruitTier]}阶甄选位`}>
+          ${[0, 1].map((index) => {
+            const selected = candidates.filter((c) => c.tier === recruitTier && st.entries[c.chessId])[index];
+            return html`<div class=${cx('lo-recruit-slot', selected && 'is-filled')}>
+              <button type="button" aria-label=${`${ROMAN[recruitTier]}甄选${index + 1}`} onClick=${() => setRecruitPicker({ tier: recruitTier, replacingId: selected?.chessId || null })}>
+                ${selected ? html`<${Img} src=${chessAvatarUrl(m, selected)} alt="" />` : html`<span class="lo-recruit-plus">＋</span>`}
+                <span><small>${ROMAN[recruitTier]} · 甄选位 ${index + 1}</small><b>${selected?.name || '选择六星干员'}</b><small>${selected ? '点击更换' : '点击选择 · 默认全部拥有'}</small></span>
+              </button>
+              ${selected ? html`<button type="button" class="lo-recruit-clear" aria-label=${`移除${selected.name}`} onClick=${() => selectRecruit(selected.chessId, '')}>×</button>` : null}
+            </div>`;
+          })}
+        </div>` : null}
+        ${recruitPicker && recruitPicker.tier === recruitTier ? html`<${RecruitPicker} key=${`${recruitPicker.tier}:${recruitPicker.replacingId}`} tier=${recruitPicker.tier}
+          candidates=${candidates} entries=${st.entries} replacingId=${recruitPicker.replacingId} m=${m}
+          onChoose=${(id) => selectRecruit(recruitPicker.replacingId, id)} onClose=${() => setRecruitPicker(null)} />` : html`<div class="lo-grid" role="listbox" aria-label="干员列表" ref=${gridRef}>
           ${list.length ? list.map((c) => html`<${RosterCard} key=${c.chessId} m=${m} chess=${c} golden=${c.goldenId ? getChess(c.goldenId) : null}
             entries=${st.entries} selected=${c.chessId === selId} onPick=${pick} />`) : html`<p class="lo-empty t-dim">没有符合条件的干员</p>`}
-        </div>
+        </div>`}
       </section>
       <div class="lo-detail-wrap">
         <button type="button" class="lo-detail-back tapx" onClick=${() => setNarrowDetail(false)}><${Icon} name="chevronLeft" />干员列表</button>

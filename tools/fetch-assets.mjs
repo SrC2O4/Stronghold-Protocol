@@ -272,6 +272,9 @@ async function main() {
   const resolved = resolveTemplate(plan.template, { root: ASSETS, spine: spine.entries, sourceOf: (rel) => dl.ledger.files[rel]?.url });
   const body = resolved.value;
   tidyManifest(body);
+  const localOperators = await readJson('data/local-operators-assets.json').catch(() => null);
+  if (localOperators) for (const group of ['chars', 'tokens', 'skills', 'modules'])
+    Object.assign(body[group] ||= {}, localOperators[group] || {});
   const fontFaces = {};
   for (const [name, f] of Object.entries(fonts.files)) fontFaces[name] = f;
   body.fonts = existsSync(join(FONTS, 'fonts.css')) ? { css: '/fonts/fonts.css', faces: fontFaces } : { faces: fontFaces };

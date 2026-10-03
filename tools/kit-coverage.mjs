@@ -26,7 +26,8 @@ function parseArgs(argv) {
   const o = { json: false, missing: false, tier: null, strict: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--json') o.json = true;
+    if (a === '--recruits') o.recruits = true;
+    else if (a === '--json') o.json = true;
     else if (a === '--missing') o.missing = true;
     else if (a === '--strict') o.strict = true;
     else if (a === '--tier') {
@@ -42,11 +43,11 @@ function parseArgs(argv) {
  * Coverage report of every visible chess (optionally one tier).
  * @param {{ tier?: number|null, kits?: object, ds?: object }} [opts]
  */
-export function kitCoverage({ tier = null, kits = KITS, ds = getDefaultSource() } = {}) {
+export function kitCoverage({ tier = null, kits = KITS, ds = getDefaultSource(), recruits = false } = {}) {
   const chessMap = ds.raw?.chess ?? {};
   const rows = [];
   const bases = Object.values(chessMap)
-    .filter((c) => c && !c.isGolden && c.visible && (tier == null || c.tier === tier))
+    .filter((c) => c && !c.isGolden && (recruits ? c.recruit : c.visible) && (tier == null || c.tier === tier))
     .sort((a, b) => a.tier - b.tier || String(a.chessId).localeCompare(String(b.chessId), 'en', { numeric: true }));
   for (const base of bases) {
     if (!Array.isArray(base.skills)) continue;
@@ -83,7 +84,7 @@ if (isMain) {
     console.error(USAGE);
     process.exit(2);
   }
-  const rep = kitCoverage({ tier: o.tier });
+  const rep = kitCoverage({ tier: o.tier, recruits: o.recruits });
   const list = o.missing ? rep.chess.filter((r) => r.skills.some((s) => !s.covered)) : rep.chess;
   if (o.json) {
     process.stdout.write(JSON.stringify({ summary: rep.summary, chess: list }, null, 1) + '\n');
@@ -95,7 +96,7 @@ if (isMain) {
     }
     const s = rep.summary;
     console.log(`\n${s.covered}/${s.skills} selectable skills hand-authored (defaults ${s.defaultCovered}/${s.defaults}); ` +
-      `${s.chessFullyCovered}/${s.chess} chess fully covered. (* = default skill; ✓ = normal+elite authored; ` +
+      `${s.chessFullyCovered}/${s.chess} chess with specs for every skill (not a fidelity assessment). (* = default skill; ✓ = normal+elite authored; ` +
       `· = falls back to: generic | none (no kit))`);
   }
   if (o.strict && rep.summary.covered < rep.summary.skills) process.exitCode = 1;

@@ -130,11 +130,20 @@ export function loadoutOptions(base, golden = null) {
 export function checkLoadout(entries, getChess) {
   if (!isLoadoutEntries(entries)) return { error: 'BAD_MSG', detail: 'bad loadout entries' };
   const out = {};
+  const recruits = new Set();
+  const counts = { 5: 0, 6: 0 };
   for (const id of Object.keys(entries)) {
     const e = entries[id];
     const base = typeof getChess === 'function' ? getChess(id) : null;
-    if (!base || base.isGolden || base.visible === false || base.isHidden || base.isDiy || (base.baseId && base.baseId !== id)) {
+    if (!base || base.isGolden || (base.visible === false && !base.recruit) || base.isHidden || base.isDiy || (base.baseId && base.baseId !== id)) {
       return { error: 'BAD_TARGET', detail: `unknown chess ${id}` };
+    }
+    if (base.recruit) {
+      if (base.recruitPresetId && getChess(base.recruitPresetId)?.visible)
+        return { error: 'BAD_TARGET', detail: '该干员已在固定卡池中，无需重复甄选' };
+      if (![5, 6].includes(base.tier) || base.rarity !== 6 || recruits.has(base.charId) || ++counts[base.tier] > 2)
+        return { error: 'BAD_TARGET', detail: '甄选每阶最多两名，不能重复选择同一干员' };
+      recruits.add(base.charId);
     }
     const golden = base.goldenId ? getChess(base.goldenId) || null : null;
     const opt = loadoutOptions(base, golden);
@@ -143,7 +152,7 @@ export function checkLoadout(entries, getChess) {
     if (e.module !== undefined && !golden) return { error: 'BAD_TARGET', detail: `${id} has no elite module` };
     const module = golden ? (e.module ?? opt.defaultModule) : null;
     if (golden && !opt.modules.includes(module)) return { error: 'BAD_TARGET', detail: `module ${e.module} not available for ${id}` };
-    if (skill === opt.defaultSkill && module === opt.defaultModule) continue;
+    if (!base.recruit && skill === opt.defaultSkill && module === opt.defaultModule) continue;
     out[id] = { skill, module };
   }
   return { ok: true, loadout: out };

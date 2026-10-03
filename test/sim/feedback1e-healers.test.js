@@ -127,7 +127,8 @@ function blockRun(unit, { member = null, bonds = {}, secs = 20, rec = null, fill
 
 test('E2 audit: every pure healer (医师 / 群愈师 / 疗养师 / 链愈师 / 行医, normal and elite, every skill cast while blocking) keeps healing while it blocks, under every bond as a member, and never hits the enemy', REAL, () => {
   const ds = getDefaultSource();
-  const healers = Object.values(ds.raw.chess).filter((c) => c.stats && c.dmgType === 'heal' && PURE.has(c.subProfessionId));
+  // Season healers only: recruit Kal'tsit needs Mon3tr to charge/cast; recruit coverage supplies her summon.
+  const healers = Object.values(ds.raw.chess).filter((c) => !c.recruit && c.stats && c.dmgType === 'heal' && PURE.has(c.subProfessionId));
   assert.ok(healers.length >= 20, `healers ${healers.length}`);
   const BONDS = JSON.parse(fs.readFileSync(new URL('../../data/bonds.json', import.meta.url), 'utf8'));
   const bonds = Object.keys(BONDS);

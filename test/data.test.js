@@ -47,13 +47,13 @@ function assertStatsFinite(stats, label, keys) {
   for (const k of keys) assert.ok(isFiniteNum(stats[k]), `${label}: stats.${k} = ${stats[k]}`);
 }
 
-test('all data files load and are non-empty; total size < 6 MB', () => {
+test('all data files load and are non-empty; total size including recruits < 24 MB', () => {
   let total = 0;
   for (const f of FILES) {
     total += statSync(join(DATA, `${f}.json`)).size;
     assert.ok(Object.keys(D[f]).length > 0, `${f} is empty`);
   }
-  assert.ok(total < 6 * 1024 * 1024, `total ${total} bytes`);
+  assert.ok(total < 24 * 1024 * 1024, `total ${total} bytes`);
 });
 
 test('numbers: every stats/bb/enemyScale object holds only finite numbers (no null/NaN leaks)', () => {
@@ -75,7 +75,7 @@ test('numbers: every stats/bb/enemyScale object holds only finite numbers (no nu
 });
 
 test('chess: 266 records, 112 visible non-DIY (16/17/19/22/19/19 per tier)', () => {
-  assert.equal(Object.keys(chess).length, 266);
+  assert.equal(Object.values(chess).filter((c) => !c.recruit).length, 266);
   assert.equal(visible.length, 112);
   const perTier = {};
   for (const c of visible) perTier[c.tier] = (perTier[c.tier] || 0) + 1;
@@ -425,7 +425,7 @@ test('chess/tokens: talent tokens resolve and every token variant says where it 
     const made = Object.values(t.variants).some((v) => makes(v.sources) || Object.values(v.bySkill || {}).some((b) => makes(b.sources)));
     assert.equal(t.placeable, t.displayType !== 'HIDDEN' && made, `${t.tokenId} (${t.name}): placeable`);
   }
-  assert.deepEqual(Object.values(tokens).filter((t) => t.placeable).map((t) => t.name).sort(),
+  assert.deepEqual(Object.values(tokens).filter((t) => t.placeable && t.owners.some((id) => !chess[id]?.recruit)).map((t) => t.name).sort(),
     ['医疗探机', '诅咒娃娃', '斯卡蒂的海嗣', '流形', '狼群', '爬行号·防护单元'].sort());
   assert.equal(tokens.enemy_9012_acloon.stats.deployLimit, tokens.enemy_9012_acloon.deployLimit);
 });
@@ -488,7 +488,7 @@ test('chess: skills[] = every skill unlocked at the status, at the chess skill l
     assert.deepEqual(rules(id), ['DEFAULT', 'DEFAULT']);
     assert.deepEqual(raws(id), ['TAKE_DAMAGE', 'TAKE_DAMAGE']);
   }
-  const deviated = Object.values(chess).flatMap((c) => (c.skills || []).filter((s) => s.trigger.rawRule === 'TAKE_DAMAGE' && s.trigger.rule !== 'TAKE_DAMAGE').map((s) => `${c.baseId} ${s.skillId}`));
+  const deviated = Object.values(chess).filter((c) => !c.recruit).flatMap((c) => (c.skills || []).filter((s) => s.trigger.rawRule === 'TAKE_DAMAGE' && s.trigger.rule !== 'TAKE_DAMAGE').map((s) => `${c.baseId} ${s.skillId}`));
   assert.equal(deviated.length, 12, 'exactly the six skills, normal + elite');
   assert.deepEqual([...new Set(deviated)].sort(), ['chess_char_1_04_a skchr_udflow_2', 'chess_char_1_20_a skchr_liskam_2', 'chess_char_2_18_a skchr_ashlok_2', 'chess_char_2_18_a skcom_atk_up[3]', 'chess_char_5_08_a skchr_horn_2', 'chess_char_5_08_a skchr_horn_3']);
   for (const c of Object.values(chess)) {

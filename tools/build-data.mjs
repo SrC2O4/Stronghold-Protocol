@@ -731,6 +731,30 @@ function hasE2Art(ctx, charId, kind) {
  * ({id, modulePhase, moduleTokenParts} per non-default module + 'none') for the token variants.
  * @returns {{ chess: object, tokenOwners: Map<string, Array<{chessId:string, charId:string, phase:number, level:number, skillIndex:number, skillLevel:number, count:number|null, golden:boolean, modulePhase:any, skillAlts:object[], moduleAlts:object[]}>> }}
  */
+function addRecruitCandidates(ctx) {
+  const { act, charTable, uniequip } = ctx;
+  const presets = Object.entries(act.charShopChessDatas).filter(([, s]) => s.charId);
+  const chars = Object.entries(charTable).filter(([id, c]) => id.startsWith('char_') && c.rarity === 'TIER_6' && !c.isNotObtainable);
+  for (const [charId, char] of chars) for (const tier of [5, 6]) {
+    const template = `chess_char_${tier}_diy1_a`;
+    const baseId = `recruit_${tier}_${charId}_a`, goldenId = baseId.replace(/_a$/, '_b');
+    const source = presets.find(([, s]) => s.charId === charId);
+    const preset = presets.find(([, s]) => s.charId === charId && !s.isHidden);
+    const mod = (uniequip.charEquip?.[charId] || []).find((id) => uniequip.equipDict?.[id]?.type === 'ADVANCED') || null;
+    const powers = [char.nationId, char.groupId, char.teamId].filter(Boolean);
+    const bonds = Object.entries(ctx.ac.bondInfoDict || {}).filter(([, b]) => b.powerIdList?.some((id) => powers.includes(id))).map(([id]) => id);
+    act.charShopChessDatas[baseId] = { ...act.charShopChessDatas[template], charId, chessType: 'CHAR',
+      goldenChessId: goldenId, defaultSkillIndex: source?.[1].defaultSkillIndex ?? 0, defaultUniEquipId: mod,
+      recruit: true, kitBaseId: source?.[0] || null, recruitPresetId: preset?.[0] || null };
+    for (const [id, suffix] of [[baseId, 'a'], [goldenId, 'b']]) {
+      const original = act.charChessDataDict[template.replace(/_a$/, `_${suffix}`)];
+      act.charChessDataDict[id] = { ...original, bondIds: bonds.length ? bonds : ['emptyShip'],
+        garrisonIds: [], upgradeChessId: suffix === 'a' ? goldenId : null };
+      act.chessNormalIdLookupDict[id] = baseId;
+    }
+  }
+}
+
 function buildChess(ctx) {
   const { act, charTable, uniequip, battleEquip } = ctx;
   const out = {};
@@ -753,7 +777,8 @@ function buildChess(ctx) {
     const rec = {
       chessId, baseId, goldenId: shop.goldenChessId, isGolden, tier,
       identifier: cd.identifier,
-      isHidden: !!shop.isHidden, isDiy, visible: !shop.isHidden && !isDiy,
+      isHidden: !!shop.isHidden, isDiy, visible: !shop.isHidden && !isDiy && !shop.recruit,
+      ...(shop.recruit ? { recruit: true, kitBaseId: shop.kitBaseId, recruitPresetId: shop.recruitPresetId } : {}),
       chessType: shop.chessType,
       shopSortId: shop.shopLevelSortId,
       charId: shop.charId || null,
@@ -840,7 +865,7 @@ function buildChess(ctx) {
       if (!se?.skillId || (i !== sIdx && !unlocked(se.unlockCond, phase, level))) return;
       const s = buildSkill(ctx, se.skillId, skillLevel, null, `chess ${chessId}`);
       if (!s) return;
-      s.trigger = resolveTrigger(ctx, char, shop.charId, i, s, { operator: true, chessId: baseId });
+      s.trigger = resolveTrigger(ctx, char, shop.charId, i, s, { operator: true, chessId: shop.kitBaseId || baseId });
       s.index = i;
       s.overrideTokenKey = se.overrideTokenKey || null;
       skillRecs.push(s);
@@ -920,6 +945,10 @@ function buildChess(ctx) {
     };
     const defUse = tokenUse(rec.skill);
     const sources = defUse.use;
+    // A recruit's S1 may not summon anything while S2/S3 does. Keep all selectable token variants.
+    if (shop.recruit) for (const s of rec.skills) for (const id of tokenUse(s).use.keys()) {
+      if (charTable[id] && !sources.has(id)) sources.set(id, new Set(['display']));
+    }
     const resolvable = [...sources.keys()].filter((id) => {
       if (charTable[id]) return true;
       // A container id already remapped onto the skill token (see above) is expected; others are anomalies.
@@ -1291,7 +1320,9 @@ function buildBonds(ctx, chess, effects) {
       if (x.key === 'bond_layer_char_garrison_bonus' && lb.layer > 0) layerMilestones.push({ layer: lb.layer, mode: 'reach', effect: x.key });
     }
 
-    const members = (b.chessIdList || []).filter((id) => chess[id] && !chess[id].isGolden).sort(naturalCmp);
+    const members = [...new Set([...(b.chessIdList || []), ...Object.values(chess)
+      .filter((c) => c.recruit && !c.isGolden && c.bonds.includes(bondId)).map((c) => c.chessId)])]
+      .filter((id) => chess[id] && !chess[id].isGolden).sort(naturalCmp);
     for (const id of b.chessIdList || []) if (!chess[id]) warn(`bond ${bondId}: member ${id} missing from chess`);
     const rb = researchBonds.get(bondId);
     const dp = textPair(b.desc);
@@ -3176,6 +3207,7 @@ function validateAll(f) {
 async function main() {
   const t0 = Date.now();
   const ctx = await loadContext();
+  addRecruitCandidates(ctx);
   log('building…');
   const { chess, tokenOwners } = buildChess(ctx);
   const effects = buildEffects(ctx);
@@ -3205,7 +3237,7 @@ async function main() {
     sizes[name] = Buffer.byteLength(texts[name]);
     total += sizes[name];
   }
-  if (total > 6 * 1024 * 1024) errors.push(`total data size ${total} exceeds 6 MB`);
+  if (total > 24 * 1024 * 1024) errors.push(`total data size ${total} exceeds 24 MB (including six-star recruits)`);
   // Integrity errors keep the previous (valid) output untouched unless --force.
   const write = !errors.length || OPTS.force;
   if (write) {

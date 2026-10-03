@@ -23,7 +23,7 @@ import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { html, Icon, HexBadge, TierChip, Tooltip, MicroLabel } from './components.js';
 import { Img, BondGlyph, CoinGlyph, GIcon, RichText } from './gameComponents.js';
 import { priceTone, mergeProgress, mergeTarget, shopBlockReason, chessLoadout, offerHeader, briefingBondTip } from './gameLogic.js';
-import { chessPortraitUrl, itemIconUrl, profIconUrl, uiUrl, skillIconUrl, skillRecordIconUrl, moduleTypeIconUrl } from './assetUrls.js';
+import { chessPortraitUrl, itemIconUrl, profIconUrl, uiUrl, skillIconUrl, skillRecordIconUrl, moduleRecordIconUrl } from './assetUrls.js';
 import { data } from '../data.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
@@ -118,7 +118,7 @@ function SkillBadge({ chess, lo }) {
   const tip = `技能${slot ? ` ${slot}` : ''}：${lo.skill.name || ''}${custom ? '（已调配）' : ''}${mod ? ` · 模组：${mod.name}` : lo.module?.none ? ' · 未装备模组' : ''}`;
   return html`<span class=${cx('scard__skill', custom && 'is-custom')} title=${tip} aria-label=${tip} data-skill=${lo.skill.skillId || ''}>
     <${Img} src=${src} fallback=${slot ? html`<span class="scard__sglyph num">${slot}</span>` : html`<${GIcon} name="bolt" />`} />
-    ${mod && mod.typeName ? html`<span class="scard__mod" data-type=${mod.typeName}><${Img} src=${moduleTypeIconUrl(data.get('local'), mod.typeName)} class="scard__modicon" />${mod.typeName}</span>` : null}
+    ${mod && mod.typeName ? html`<span class="scard__mod" data-type=${mod.typeName}><${Img} src=${moduleRecordIconUrl(m, mod, data.get('local'))} class="scard__modicon" />${mod.typeName}</span>` : null}
   </span>`;
 }
 

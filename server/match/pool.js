@@ -69,6 +69,20 @@ export class SharedPool {
 
   /** Whether a base chess is part of this match's pool (visible, not banned). */
   has(baseId) { return this.entries.has(baseId); }
+
+  /** Reconcile pre-match selections. Existing preset copies are never reset. */
+  setRecruits(ids, disabledBonds = []) {
+    const off = new Set(disabledBonds);
+    const wanted = new Set([...ids].filter((id) => {
+      const c = this.gd.chess(id);
+      return c?.recruit && !c.isGolden && !(c.bonds?.length && c.bonds.every((b) => off.has(b)));
+    }));
+    for (const [id, e] of this.entries) if (this.gd.chess(id)?.recruit && !wanted.has(id) && e.left === e.cap) this.entries.delete(id);
+    for (const id of wanted) if (!this.entries.has(id)) {
+      const cap = this.gd.poolCopies(id);
+      if (cap > 0) this.entries.set(id, { cap, left: cap, tier: this.gd.tierOf(id) });
+    }
+  }
   cap(baseId) { return this.entries.get(baseId)?.cap ?? 0; }
   left(baseId) { return this.entries.get(baseId)?.left ?? 0; }
 

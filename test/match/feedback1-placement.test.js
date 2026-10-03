@@ -129,7 +129,8 @@ test('#3 bots never put a piece into the water (layout planner and full bot prep
 test('#9 data: 狼群 and 流形 are owner-range summons (token text "只能部署在召唤者攻击范围内"), no other hand summon is', () => {
   assert.equal(DATA.tokens[WOLF].ownerRange, true);
   assert.equal(DATA.tokens[MANIFOLD].ownerRange, true);
-  for (const t of Object.values(DATA.tokens)) if (t.placeable && t.tokenId !== WOLF && t.tokenId !== MANIFOLD) assert.ok(!t.ownerRange, t.name);
+  // The original roster only; recruits add other owner-range summons such as Ray's Sandbeast.
+  for (const t of Object.values(DATA.tokens)) if (t.placeable && t.owners.some((id) => !DATA.chess[id]?.recruit) && t.tokenId !== WOLF && t.tokenId !== MANIFOLD) assert.ok(!t.ownerRange, t.name);
 });
 
 test('#9 g.move: 伺夜\'s 狼群 only on a tile of her attack range (rotated grid of her tile + facing); outside → BAD_TILE', () => {

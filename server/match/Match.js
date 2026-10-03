@@ -315,6 +315,7 @@ export class Match {
     this.staticInactiveBonds = bans.staticOff;
     this.bannedChess = bans.banned;
     this.pool = new SharedPool(this.gd, { banned: bans.banned });
+    this.syncRecruits();
 
     this.phase = PHASE.LOBBY;
     this.round = 0;
@@ -422,9 +423,15 @@ export class Match {
     let res = OK;
     this.guard(() => {
       if (!ps.setLoadout(loadout)) { res = fail(ERR.BAD_TARGET, 'loadout does not match the game data'); return; }
+      this.syncRecruits();
       this.markPrivate(ps);
     });
     return res;
+  }
+
+  syncRecruits() {
+    const ids = [...this.players.values()].flatMap((ps) => Object.keys(ps.loadout || {}));
+    this.pool.setRecruits(ids, [...this.disabledBonds, ...this.staticInactiveBonds]);
   }
 
   onDisconnect(playerId) {

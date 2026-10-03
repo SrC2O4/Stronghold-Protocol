@@ -32,6 +32,7 @@
     "postinstall": "node tools/vendor.mjs",
     "setup": "node tools/setup.mjs",
     "doctor": "node tools/doctor.mjs",
+    "extract-operators": "node tools/extract-operators.mjs",
     "launch": "node scripts/launch.mjs"
   },
   "engines": {

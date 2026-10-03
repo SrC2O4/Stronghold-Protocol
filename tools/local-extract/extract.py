@@ -46,13 +46,50 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parents[2]
 HOME = Path.home()
+# Per-machine settings (gitignored; template: local.config.example.json). Lookup order for the client:
+#   --game <dir>  >  env ARKNIGHTS_GAME_DIR  >  local.config.json "gameDir"  >  the default install locations below.
+# "gameDir" may be the game folder (the one holding Arknights_Data) or the AssetBundle root itself.
+LOCAL_CONFIG = ROOT / 'local.config.json'
+AB_TAIL = Path('Arknights_Data/StreamingAssets/AB/Windows')
 CANDIDATES = [
-    HOME / 'Library/Application Support/CrossOver/Bottles/Arknights/drive_c/Program Files/Hypergryph Launcher/games/Arknights/Arknights_Data/StreamingAssets/AB/Windows',
+    HOME / 'Library/Application Support/CrossOver/Bottles/Arknights/drive_c/Program Files/Hypergryph Launcher/games/Arknights' / AB_TAIL,
     HOME / 'Library/Containers/com.hypergryph.arknights/Data/Documents/Bundles',
-    # native Windows installs of the official launcher (default and x86 locations)
-    Path('C:/Program Files/Hypergryph Launcher/games/Arknights/Arknights_Data/StreamingAssets/AB/Windows'),
-    Path('C:/Program Files (x86)/Hypergryph Launcher/games/Arknights/Arknights_Data/StreamingAssets/AB/Windows'),
 ]
+# native Windows installs of the official launcher (default, x86 and non-system-drive locations)
+for _drive in 'CDEFGH':
+    for _base in ('Program Files/Hypergryph Launcher', 'Program Files (x86)/Hypergryph Launcher', 'Hypergryph Launcher',
+                  'Games/Hypergryph Launcher'):
+        for _game in ('Arknights', 'Arknights Game'):
+            CANDIDATES.append(Path(f'{_drive}:/') / _base / 'games' / _game / AB_TAIL)
+
+
+def configured_game_dir():
+    """Game dir from env ARKNIGHTS_GAME_DIR or local.config.json ("gameDir"); None when neither is set."""
+    env = os.environ.get('ARKNIGHTS_GAME_DIR', '').strip()
+    if env:
+        return env
+    try:
+        value = json.loads(LOCAL_CONFIG.read_text(encoding='utf-8-sig')).get('gameDir')
+    except FileNotFoundError:
+        return None
+    except (ValueError, AttributeError) as e:
+        print(f'warning: {LOCAL_CONFIG.name} ignored ({e})', file=sys.stderr)
+        return None
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def as_ab_root(path):
+    """Accept the game folder (…/Arknights) as well as the AssetBundle root (…/StreamingAssets/AB/Windows)."""
+    p = Path(path).expanduser()
+    return p / AB_TAIL if (p / 'Arknights_Data').is_dir() else p
+
+
+def resolve_game_root(explicit=None):
+    """--game > env > local.config.json > first existing default location; None when nothing is found."""
+    chosen = explicit or configured_game_dir()
+    if chosen:
+        return as_ab_root(chosen)
+    return next((p for p in CANDIDATES if p.exists()), None)
 
 # In-match emote themes (display_meta_table emoticonData, scene AUTOCHESS_BATTLE), in the order of
 # activity_table autoChessData.enabledEmoticonThemeIdList: (themeId, output dir under emoticon/). The dirs are the
@@ -547,7 +584,8 @@ def export_enemy_spines(ab_root, out_root, manifest, log, ids=None):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--game', help='AssetBundle root (…/StreamingAssets/AB/Windows or …/Documents/Bundles)')
+    ap.add_argument('--game', help='game folder or AssetBundle root (…/StreamingAssets/AB/Windows or …/Documents/Bundles); '
+                    'default: env ARKNIGHTS_GAME_DIR, local.config.json, then the known install locations')
     ap.add_argument('--out', default=str(ROOT / 'public/assets/local'))
     ap.add_argument('--manifest', default=str(ROOT / 'data/local-assets.json'))
     ap.add_argument('--only', action='append', default=[], metavar='SUBDIR',
@@ -564,9 +602,10 @@ def main():
                                                               'ids': ENEMY_SPINES}}, ensure_ascii=False))
         return 0
 
-    ab_root = Path(args.game) if args.game else next((p for p in CANDIDATES if p.exists()), None)
+    ab_root = resolve_game_root(args.game)
     if not ab_root or not ab_root.exists():
-        print('No Arknights install found. Pass --game <AssetBundle root>.', file=sys.stderr)
+        print(f'No Arknights install found{" at " + str(ab_root) if ab_root else ""}. Pass --game <dir> or set "gameDir" '
+              f'in {LOCAL_CONFIG.name} (see local.config.example.json).', file=sys.stderr)
         return 2
     jobs = select_jobs(args.only)
     enemy_spines = wants_sub(args.only, ENEMY_SPINE_SUB)

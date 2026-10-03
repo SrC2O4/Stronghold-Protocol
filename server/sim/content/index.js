@@ -34,12 +34,13 @@ async function safeImport(path) {
 }
 
 const TIERS = await Promise.all([1, 2, 3, 4, 5, 6].map((t) => safeImport(`./kits/tier${t}.js`)));
+const RECRUITS = await Promise.all(['Classic', 'Tactics', 'Combat', 'Summons', 'Special'].map(n => safeImport(`./kits/recruits${n}.js`)));
 const DOMAIN_NAMES = ['tokens', 'devices', 'enemies', 'bosses', 'bonds', 'garrisons', 'items', 'bands', 'choices'];
 const DOMAINS = await Promise.all(DOMAIN_NAMES.map((n) => safeImport(`./${n}.js`)));
 const tokens = DOMAINS[0];
 
 /** Merged kit registry: baseChessId → (bb, chess, def) => Kit */
-export const KITS = Object.freeze(Object.assign({}, ...TIERS.map((m) => (m && m.default && typeof m.default === 'object' ? m.default : {}))));
+export const KITS = Object.freeze(Object.assign({}, ...TIERS.map((m) => (m && m.default && typeof m.default === 'object' ? m.default : {})), ...RECRUITS.map(m => m.default ?? {})));
 
 /** Domain modules in install order: tokens, devices, enemies, bosses, bonds, garrisons, items, bands, choices. */
 export const MODULES = Object.freeze(DOMAIN_NAMES.map((n, i) => [n, DOMAINS[i]]));
@@ -63,7 +64,7 @@ export function setupUnitKit(battle, unit, mode = 'full') {
   if (mode === 'full' || injected) {
     // DESIGN §5.6's example keys kits by the suffix-less id (`chess_char_1_01`), data/SIM.md by baseId (`…_a`): accept both
     const bare = String(def.baseId ?? def.id ?? '').replace(/_[ab]$/, '');
-    const pick = (reg) => reg?.[def.baseId] ?? reg?.[def.id] ?? reg?.[bare];
+    const pick = (reg) => reg?.[def.baseId] ?? reg?.[def.id] ?? reg?.[bare] ?? reg?.[raw.kitBaseId] ?? reg?.[def.charId];
     const f = pick(injected) ?? (mode === 'full' ? pick(KITS) : undefined);
     if (typeof f === 'function') {
       try {
@@ -173,7 +174,7 @@ export function selectSkillSpec(kit, bb, raw, def) {
  */
 export function skillSpecSource(def, kits = KITS) {
   const bare = String(def?.baseId ?? def?.id ?? '').replace(/_[ab]$/, '');
-  const f = kits?.[def?.baseId] ?? kits?.[def?.id] ?? kits?.[bare];
+  const f = kits?.[def?.baseId] ?? kits?.[def?.id] ?? kits?.[bare] ?? kits?.[def?.raw?.kitBaseId] ?? kits?.[def?.charId];
   if (typeof f !== 'function') return 'none';
   let k = null;
   try { k = f(def.skill?.bb ?? {}, def.raw ?? def, def); } catch { return 'generic'; }

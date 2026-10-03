@@ -275,6 +275,7 @@ export const SUB = Object.freeze({
   fastshot: P({ priority: 'fly', dmgMul: (b, u, t) => (t.isFlying ? (u.profile.flyScale ?? 1) : 1) }),
   closerange: P({}),
   longrange: P({ priority: 'lowDef' }),
+  siegesniper: P({ priority: 'heaviest' }),
   aoesniper: P({ splashRadius: 1.1, projectile: 'bomb' }),
   // PRTS 溅射半径一览 (特性): 投掷手 0.9, 扩散术师 1.1 (格雷伊 1.0, TUNE below), 链术师 1.7 jumps; 炮手 1.0 (none in the pool)
   bombarder: P({ splashRadius: 0.9, projectile: 'bomb', groundOnly: true, canHitFly: false,
@@ -324,8 +325,10 @@ export const SUB = Object.freeze({
   phalanx: P({ noAttackUnlessSkill: true, rangeAoe: true, install: installPhalanx }),
   primcaster: P({}),
   corecaster: P({}),
+  soulcaster: P({ dmgType: 'arts', canHitFly: true }),
   // --- MEDIC
   physician: P({ heal: { mode: 'single' } }),
+  watchman: P({ dmgType: 'heal', heal: { mode: 'single' }, blockFly: true, install: installSkywalker }),
   ringhealer: P({ heal: { mode: 'multi', count: 3 } }),
   chainhealer: P({ heal: { mode: 'chain', count: 3, falloff: 0.25 } }),
   healer: P({ heal: { mode: 'single', farMul: 0.8, nearDist: 2 } }),
@@ -343,8 +346,12 @@ export const SUB = Object.freeze({
   ritualist: P({}),
   craftsman: P({ attack: 'melee', dmgType: 'phys', projectile: 'none', canHitFly: false }),
   summoner: P({}),
+  blessing: P({ dmgType: 'arts', canHitFly: true }),
   // --- TANK
   protector: P({}),
+  artsprotector: P({ install: (b, u) => {
+    b.on('hit', c => { if (c.source === u && c.dmg.isAttack && u.skill?.active) c.dmg.type = 'arts'; }, { owner: u });
+  } }),
   guardian: P({}),
   shotprotector: P({ attack: 'ranged', canHitFly: true, projectile: 'arrow' }),
   primprotector: P({}),

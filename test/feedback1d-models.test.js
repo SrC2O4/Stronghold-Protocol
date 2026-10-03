@@ -95,10 +95,11 @@ describe('D3: the official slug models are an optional overlay of the web alias'
     }
   });
 
-  test('data/assets.json never depends on the local extraction (no /assets/local/ URL; the web model always there)', () => {
+  test('enemy assets never depend on local extraction (operator recruits use a separate local overlay)', () => {
     const urls = [];
     const walk = (n) => { if (typeof n === 'string') { if (n.includes('/assets/local/')) urls.push(n); } else if (n && typeof n === 'object') Object.values(n).forEach(walk); };
-    walk(MANIFEST);
+    const { chars, tokens, skills, modules, ...nonOperatorAssets } = MANIFEST;
+    walk(nonOperatorAssets);
     assert.deepEqual(urls, [], 'setup / doctor / the manifest tests count every /assets/ URL as required');
     for (const [id, e] of Object.entries(MANIFEST.enemies)) {
       if (!e.spineLocal) continue;

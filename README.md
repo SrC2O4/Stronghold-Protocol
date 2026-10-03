@@ -46,6 +46,7 @@ English summary: [below](#english).
 - **休整期**：招募、刷新、冻结、升级调度中心；整备区与临时整备区；从整备区拖到棋盘部署，用**方向轮盘**选择朝向。同盟模拟的卡池共用。
 - **晋升精锐**：3 名同名干员自动合成精锐，并获得一次高一阶的免费招募。
 - **干员与调配**：112 名可招募干员（+ 精锐）及其技能、天赋和特质；开局前可以为每名干员选择携带的技能（283 个技能全部手工实现）和精锐的模组。
+- **V / VI 甄选**：在「干员调配」的 V、VI 标签页点击甄选框，各选两名六星，默认拥有全部可获得六星，无需账号导入；同一干员不能重复甄选。已在固定卡池的 59 名六星不再出现在候选中，其余 78 名可搜索选择。同盟玩家的选择加入共享卡池。78 名候选已接入专属自动战斗适配，但复杂路径、部分模组与特殊交互仍有简化，尚不等同于完整原作复刻。见 [甄选说明](docs/RECRUITS.md)及[机制适配与限制](docs/RECRUIT-MECHANICS.md)。
 - **盟约与层数**：23 个盟约（8 个势力核心盟约 + 附加盟约），层数整局保留，每个盟约最多 999 层。
 - **装备与机变**：装备与法术，同名装备合成、特定组合赋予盟约效果；已配发的装备锁定在干员身上。部分回合开始前有机变选卡（装备、资金、干员、层数、悬赏等）。
 - **自动作战**：技能按官方「技能策略」自动释放；按接触半径阻挡，阻挡者倒下时由接触的干员接替；元素损伤与元素爆发；召唤物由玩家手动摆放；推开 / 拉拽按力度与重量计算；被击倒的干员留在原地显示再部署倒计时。
@@ -86,8 +87,9 @@ npm start          # 启动服务器：http://localhost:3000
 
 也可以直接运行启动脚本（Windows `scripts\start-windows.bat`，macOS / Linux `scripts/start.sh`）：首次会自动安装依赖、下载素材，然后启动服务器并打开浏览器。
 
-- **官方 3D 棋盘**需要从本机的《明日方舟》PC 客户端提取贴图（Windows 原生客户端、macOS 的 CrossOver 或 PlayCover）。`npm run setup` 检测到客户端时会询问是否提取（需要 Python 3.8+，依赖装在项目内的 `.venv-extract`，不影响系统）；之后可以用 `node tools/setup.mjs --local` 重新提取，或用 `--game "<…/StreamingAssets/AB/Windows>"` 指定路径。没有客户端时自动使用 2D 棋盘，其他功能不受影响。
+- **官方 3D 棋盘**需要从本机的《明日方舟》PC 客户端提取贴图（Windows 原生客户端、macOS 的 CrossOver 或 PlayCover）。`npm run setup` 检测到客户端时会询问是否提取（需要 Python 3.8+，依赖装在项目内的 `.venv-extract`，不影响系统）；之后可以用 `node tools/setup.mjs --local` 重新提取，或用 `--game "<游戏目录>"` 指定路径。客户端不在默认位置时，也可以把 `local.config.example.json` 复制为 `local.config.json`，在 `gameDir` 里填游戏目录（含 `Arknights_Data` 的文件夹，或 `…/StreamingAssets/AB/Windows`；也可用环境变量 `ARKNIGHTS_GAME_DIR`）。该文件不会提交到 git，所有本地提取脚本都会读取它；优先级：`--game` > 环境变量 > `local.config.json` > 默认安装位置。没有客户端时自动使用 2D 棋盘，其他功能不受影响。
 - 素材下载优先使用 GitHub，失败时自动改用 jsDelivr 镜像。
+- **甄选干员本地素材**：先按上面的 `--local` 流程准备 `.venv-extract`，再执行 `npm run extract-operators`（已配置 `local.config.json` 时无需 `--game`）。从本机客户端导出全体六星的正反面 Spine、头像、小立绘，以及可配置技能和模组的图标；不会修改客户端文件。失败项记录在 `.cache/local-operators-report.json`，可加 `--retry` 重试模型，或加 `--icons-only` 只更新图标。提取结果保存在项目的 `public/assets/local/`，后续素材下载会保留这些本地结果。
 - `npm run doctor`（即 `node tools/doctor.mjs`）可以随时诊断：Node 版本、素材是否完整、端口占用、局域网地址和防火墙。
 
 ### 系统要求

@@ -25,7 +25,7 @@ Unknown options or a missing option value are errors (exit code 2); `--refresh` 
   Integrity errors (see §17) make the exit code 1 **and leave the previous output untouched** (unless `--force`);
   warnings never do. Each output file is written atomically (temp file + rename).
 - **Determinism.** Same inputs ⇒ byte-identical outputs (stable key order, no timestamps, no randomness).
-- **Size.** ≈3.5 MB total (limit 6 MB; `chess.json` ≈1.65 MB with the loadout choices), compact JSON (no indentation).
+- **Size.** 含全六星甄选候选后总计约 8.2 MB，上限 24 MB；使用紧凑 JSON。甄选记录的 `recruit: true`、`visible: false` 表示可选但默认不进入商店；`kitBaseId` 指向可复用的固定棋子技能；否则按 `charId` 查找新增干员专属适配，未注册的角色才使用通用模拟。详见 [RECRUITS.md](RECRUITS.md)。
 - **Derived paths.** `stages.json groundPaths*` come from the sim's own `server/sim/grid.js` pathing: a change there
   needs a rebuild (the offline-rebuild test catches a stale `data/`).
 

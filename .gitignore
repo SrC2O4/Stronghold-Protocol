@@ -10,6 +10,7 @@ public/fonts/
 # tools/local-extract/extract.py → public/assets/local/** and this per-machine manifest
 # (optional: the client and the tests work without it)
 data/local-assets.json
+data/local-operators-assets.json
 # download caches, upstream tables, ledgers, reports, setup state
 .cache/
 
@@ -26,6 +27,8 @@ logs/
 
 # --- per-machine config (scripts/install-service-windows.ps1) ------------------------------------
 scripts/service.env.cmd
+# local client path etc. (template: local.config.example.json)
+local.config.json
 .env
 .env.*
 

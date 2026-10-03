@@ -112,6 +112,7 @@ const PRIORITY_FNS = {
   ranged: (e) => (e.base.rangeRadius > 0 && e.def?.applyWay !== 'MELEE' ? 0 : 1),
   lowestHp: (e) => e.hp,
   highestHp: (e) => -e.hp,
+  heaviest: (e) => -(e.s.massLevel ?? 0),
   lowestHpRatio: (e) => e.hpRatio,
   highestAtk: (e) => -e.s.atk,
   boss: (e) => (e.isBoss ? 0 : 1),

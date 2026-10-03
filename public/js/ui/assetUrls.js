@@ -174,6 +174,18 @@ export function moduleTypeIconUrl(local, typeName) {
   return idx.get(key) || null;
 }
 
+/** The operator's own module image, with the local module-type glyph as fallback. */
+export function moduleRecordIconUrl(m, rec, local = null) {
+  if (!rec) return null;
+  for (const group of ['modules', 'uniequip', 'equip']) {
+    const icons = obj(obj(m)?.[group]);
+    for (const key of [rec.icon, rec.uniEquipId, rec.id]) {
+      if (icons && key && str(icons[key])) return str(icons[key]);
+    }
+  }
+  return moduleTypeIconUrl(local, rec.typeName || rec.type);
+}
+
 /**
  * Icon for an m.private.effects entry: { iconKind: 'band'|'choice'|'team'|'item'|'garrison', iconId }.
  * @param {any} m

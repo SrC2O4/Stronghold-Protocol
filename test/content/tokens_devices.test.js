@@ -421,7 +421,7 @@ test('爬行号·防护单元: shield = 凯瑟琳 max HP × max_shield_ratio on 
 
 test('every token of data/tokens.json spawns with data defaults and runs without content errors', REAL, () => {
   const raw = ds.raw.tokens && Object.keys(ds.raw.tokens).length ? ds.raw.tokens : {};
-  const ids = Object.keys(raw).filter((id) => id !== TOKEN_IDS.yanyou);
+  const ids = Object.keys(raw).filter((id) => id !== TOKEN_IDS.yanyou && (!raw[id].owners.length || raw[id].owners.some((owner) => !ds.raw.chess[owner]?.recruit)));
   assert.ok(ids.length >= 21);
   const h = makeBattle({ defs: { chess: { test_owner: summoner() }, enemies: { enemy_walker: walker({ atk: 50 }) } }, units: [{ chessId: 'test_owner', row: 12, col: 2 }], enemies: [{ key: 'enemy_walker', route: 0, count: 5, interval: 2 }], autoFinish: false, timeLimit: 60 });
   h.step();

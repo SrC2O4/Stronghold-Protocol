@@ -78,7 +78,9 @@ test('data: the six deviated 重装 skills are DEFAULT on the normal and the eli
   assert.equal(n, 12);
   // nothing else changed: every other MANUAL 重装 skill keeps the row (深巡 S1 included), and the generic
   // skcom_atk_up[3] keeps each other carrier's own rule (the deviation is keyed per chess, never per skill id)
-  for (const c of Object.values(CHESS)) {
+  // This audit covers the season roster; recruits may have character-specific healing triggers.
+  // Recruit aliases inheriting deviations are checked in content/recruits.test.js.
+  for (const c of Object.values(CHESS).filter((c) => !c.recruit)) {
     for (const s of c.skills || []) {
       if (isDeviated(c, s.skillId)) continue;
       if (s.trigger.rawRule === 'TAKE_DAMAGE') assert.equal(s.trigger.rule, 'TAKE_DAMAGE', `${c.chessId} ${s.skillId}`);
@@ -124,7 +126,7 @@ test('real battle: each deviated skill casts with an enemy in range before anyth
 
 test('real battle: 深巡 S1 and every other MANUAL 重装 skill still wait for a hit (TAKE_DAMAGE)', () => {
   let n = 0;
-  for (const c of Object.values(CHESS)) {
+  for (const c of Object.values(CHESS).filter((c) => !c.recruit)) {
     if (c.profession !== 'TANK' || c.isDiy) continue;
     for (const s of c.skills) {
       if (s.skillType !== 'MANUAL' || s.trigger.rule !== 'TAKE_DAMAGE') continue;

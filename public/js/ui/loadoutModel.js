@@ -139,6 +139,7 @@ export function setChoice(entries, base, golden, patch) {
   const out = { ...(entries || {}) };
   delete out[base.chessId];
   const e = {};
+  if (base.recruit) e.skill = skill;
   if (skill !== opt.defaultSkill && skill != null) e.skill = skill;
   if (golden && module !== opt.defaultModule && module != null) e.module = module;
   if (Object.keys(e).length) out[base.chessId] = e;
@@ -180,7 +181,10 @@ export function sanitizeEntries(entries, getChess) {
     }
     if (res.loadout[id]) out[id] = one;
   }
-  return out;
+  // Enforce cross-entry recruit limits too, including stale localStorage selections.
+  const valid = {};
+  for (const [id, e] of Object.entries(out)) if (checkLoadout({ ...valid, [id]: e }, getChess).ok) valid[id] = e;
+  return valid;
 }
 
 /** Selected SkillRecord of a board / shop chess under a loadout (the elite gets its Lv7 record). */
@@ -244,7 +248,7 @@ export function changedCount(entries, getChess) {
   let n = 0;
   for (const id of Object.keys(entries || {})) {
     const { base, golden } = recordsOf(id, getChess);
-    if (isLoadoutSlot(base) && base.chessId === id && effectiveChoice(entries, base, golden).changed) n++;
+    if ((isLoadoutSlot(base) || base?.recruit) && base.chessId === id && effectiveChoice(entries, base, golden).changed) n++;
   }
   return n;
 }

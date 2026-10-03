@@ -22,6 +22,8 @@
 //   --no-local       skip the local-client detection and extraction
 //   --local          extract from the local client without asking (re-extracts when already done)
 //   --game <dir>     AssetBundle root of the local client (…/StreamingAssets/AB/Windows or PlayCover …/Documents/Bundles)
+//                    (also accepts the game folder; remembered in local.config.json — see local.config.example.json;
+//                    lookup order: --game > env ARKNIGHTS_GAME_DIR > local.config.json "gameDir" > default install locations)
 //   -y, --yes        answer "yes" to every question
 //   --quiet          fewer lines (used by scripts/launch.mjs)
 //   -h, --help
@@ -216,6 +218,34 @@ function cropBoardTiles(log) {
 
 const AB_TAIL = ['Arknights_Data', 'StreamingAssets', 'AB', 'Windows'];
 
+/** Per-machine settings (gitignored; template: local.config.example.json). */
+export const LOCAL_CONFIG = path.join(ROOT, 'local.config.json');
+
+export function readLocalConfig() {
+  try { return JSON.parse(fs.readFileSync(LOCAL_CONFIG, 'utf8').replace(/^\uFEFF/, '')) || {}; }
+  catch (e) { if (e.code !== 'ENOENT') console.warn(`local.config.json 无法解析，已忽略（${e.message}）`); return {}; }
+}
+
+export function writeLocalConfig(patch) {
+  const next = { ...readLocalConfig(), ...patch };
+  fs.writeFileSync(LOCAL_CONFIG, JSON.stringify(next, null, 2) + '\n');
+  return next;
+}
+
+/** Client dir set by the player: env ARKNIGHTS_GAME_DIR, then local.config.json "gameDir". */
+export function configuredGameDir() {
+  const env = (process.env.ARKNIGHTS_GAME_DIR || '').trim();
+  if (env) return { path: env, kind: 'ARKNIGHTS_GAME_DIR' };
+  const v = readLocalConfig().gameDir;
+  return typeof v === 'string' && v.trim() ? { path: v.trim(), kind: 'local.config.json' } : null;
+}
+
+/** Accept the game folder (…/Arknights) as well as the AssetBundle root (…/StreamingAssets/AB/Windows). */
+export function asAbRoot(dir) {
+  const p = path.resolve(dir.replace(/^~(?=$|[\\/])/, os.homedir()));
+  return exists(path.join(p, 'Arknights_Data')) ? path.join(p, ...AB_TAIL) : p;
+}
+
 /** Candidate AssetBundle roots for this OS (existence not checked). */
 export function clientCandidates() {
   const home = os.homedir();
@@ -228,6 +258,10 @@ export function clientCandidates() {
       ['Program Files (x86)', 'Hypergryph Launcher', 'games', 'Arknights'],
       ['Hypergryph Launcher', 'games', 'Arknights'],
       ['Games', 'Hypergryph Launcher', 'games', 'Arknights'],
+      ['Program Files', 'Hypergryph Launcher', 'games', 'Arknights Game'],
+      ['Program Files (x86)', 'Hypergryph Launcher', 'games', 'Arknights Game'],
+      ['Hypergryph Launcher', 'games', 'Arknights Game'],
+      ['Games', 'Hypergryph Launcher', 'games', 'Arknights Game'],
       ['Program Files', 'Hypergryph', 'Arknights'],
       ['Arknights'],
     ];
@@ -260,9 +294,10 @@ export function inspectClientRoot(dir) {
   return { exists: true, autochess };
 }
 
-/** First installed client (explicit dir first). */
+/** First installed client: --game, else env / local.config.json, else the default locations. */
 export function findClient(explicit) {
-  const list = explicit ? [{ path: path.resolve(explicit), kind: '--game' }] : clientCandidates();
+  const chosen = explicit ? { path: explicit, kind: '--game' } : configuredGameDir();
+  const list = chosen ? [{ path: asAbRoot(chosen.path), kind: chosen.kind }] : clientCandidates();
   let partial = null;
   for (const cand of list) {
     const info = inspectClientRoot(cand.path);
@@ -422,7 +457,7 @@ async function main() {
     const already = local.manifest && local.dirPresent;
     if (!client) {
       if (already && local.board3d && !local.tiles && !opts.check) cropBoardTiles(log);
-      add(already ? 'ok' : 'skip', '本地客户端美术（可选）', already ? `已提取 ${local.count} 项` : (opts.game ? `找不到 ${opts.game}` : '未检测到本机明日方舟客户端（不影响游戏）'));
+      add(already ? 'ok' : 'skip', '本地客户端美术（可选）', already ? `已提取 ${local.count} 项` : (opts.game ? `找不到 ${opts.game}` : configuredGameDir() ? `找不到 ${configuredGameDir().path}（来自 ${configuredGameDir().kind}）` : '未检测到本机明日方舟客户端（不影响游戏；可在 local.config.json 填写 gameDir）'));
     } else if (!client.autochess) {
       add(already ? 'ok' : 'warn', '本地客户端美术（可选）', `${client.kind} 客户端缺少卫戍协议资源（请在游戏内下载全部资源）：${client.path}`);
     } else if (already && opts.local !== 'force') {
@@ -456,7 +491,7 @@ async function main() {
             const r = run(venv.python, [EXTRACT_PY, '--game', client.path], { env: PY_ENV });
             if (r.ok) cropBoardTiles(log);
             const after = checkLocal();
-            if (r.ok && after.manifest) { add('ok', '本地客户端美术（可选）', `提取 ${after.count} 项${after.board3d ? '，3D 棋盘可用' : ''}`); saveState({ localDeclined: false, localExtractedFrom: client.path }); }
+            if (r.ok && after.manifest) { add('ok', '本地客户端美术（可选）', `提取 ${after.count} 项${after.board3d ? '，3D 棋盘可用' : ''}`); saveState({ localDeclined: false, localExtractedFrom: client.path }); if (opts.game) writeLocalConfig({ gameDir: path.resolve(opts.game) }); }
             else add('warn', '本地客户端美术（可选）', `提取未成功（退出码 ${r.code}），游戏不受影响；可稍后重试 node tools/setup.mjs --local`);
           }
         }
